@@ -868,14 +868,11 @@
     <script>
         // Firebase設定
         const firebaseConfig = {
-    apiKey: "AIzaSyABTIK8Xwj0fcdWL2T7Z2le9_UDoXdu10U",
-    authDomain: "virtual-office-team.firebaseapp.com",
-    databaseURL: "https://virtual-office-team-default-rtdb.asia-southeast1.firebasedatabase.app/",
-    projectId: "virtual-office-team",
-    storageBucket: "virtual-office-team.firebasestorage.app",
-    messagingSenderId: "904879677778",
-    appId: "1:904879677778:web:ac4c511b383b02c4b35a8b"
-};
+            apiKey: "your-api-key-here",
+            authDomain: "your-project.firebaseapp.com",
+            databaseURL: "https://your-project-default-rtdb.firebaseio.com",
+            projectId: "your-project-id"
+        };
 
         // Firebase初期化
         let database = null;
@@ -1048,7 +1045,8 @@
             const peerConnection = new RTCPeerConnection({
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun.ekiga.net' }
                 ]
             });
             
@@ -1066,6 +1064,7 @@
                 const remoteStream = event.streams[0];
                 remoteStreams[remoteUserId] = remoteStream;
                 setupRemoteAudio(remoteUserId, remoteStream);
+                showNotification(`🎤 ${users[remoteUserId]?.nickname || 'ユーザー'}と音声接続しました`);
             };
             
             // ICE候補の処理
@@ -1078,7 +1077,115 @@
                 }
             };
             
+            // 接続状態の監視
+            peerConnection.onconnectionstatechange = () => {
+                console.log(`WebRTC接続状態 (${remoteUserId}):`, peerConnection.connectionState);
+                if (peerConnection.connectionState === 'connected') {
+                    showNotification(`🎉 ${users[remoteUserId]?.nickname || 'ユーザー'}と音声通話開始`);
+                }
+            };
+            
             return peerConnection;
+        }
+
+        // WebRTCシグナリング完全実装
+        async function initializeWebRTCSignaling() {
+            if (!isFirebaseEnabled || !currentUser) return;
+            
+            const signalingRef = database.ref(`webrtc/${currentUser.id}`);
+            const offersRef = database.ref(`webrtc_offers/${currentUser.id}`);
+            const answersRef = database.ref(`webrtc_answers/${currentUser.id}`);
+            
+            // オファーの監視
+            offersRef.on('child_added', async (snapshot) => {
+                const offer = snapshot.val();
+                const remoteUserId = snapshot.key;
+                
+                if (remoteUserId && offer.sdp) {
+                    console.log(`${remoteUserId}からのオファーを受信`);
+                    await handleOffer(remoteUserId, offer);
+                    snapshot.ref.remove();
+                }
+            });
+            
+            // アンサーの監視
+            answersRef.on('child_added', async (snapshot) => {
+                const answer = snapshot.val();
+                const remoteUserId = snapshot.key;
+                
+                if (remoteUserId && answer.sdp) {
+                    console.log(`${remoteUserId}からのアンサーを受信`);
+                    await handleAnswer(remoteUserId, answer);
+                    snapshot.ref.remove();
+                }
+            });
+            
+            // ICE候補の監視
+            signalingRef.on('child_added', async (snapshot) => {
+                const data = snapshot.val();
+                const remoteUserId = snapshot.key;
+                
+                if (data.candidates) {
+                    Object.values(data.candidates).forEach(async (candidateData) => {
+                        if (candidateData.candidate && peerConnections[remoteUserId]) {
+                            await peerConnections[remoteUserId].addIceCandidate(candidateData.candidate);
+                        }
+                    });
+                }
+            });
+        }
+
+        // オファーの処理
+        async function handleOffer(remoteUserId, offer) {
+            try {
+                const peerConnection = await setupWebRTC(remoteUserId);
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                
+                // アンサーをFirebaseに送信
+                await database.ref(`webrtc_answers/${remoteUserId}/${currentUser.id}`).set({
+                    sdp: answer,
+                    timestamp: Date.now()
+                });
+                
+                console.log(`${remoteUserId}にアンサーを送信しました`);
+            } catch (error) {
+                console.error('オファー処理エラー:', error);
+            }
+        }
+
+        // アンサーの処理
+        async function handleAnswer(remoteUserId, answer) {
+            try {
+                const peerConnection = peerConnections[remoteUserId];
+                if (peerConnection) {
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                    console.log(`${remoteUserId}からのアンサーを設定しました`);
+                }
+            } catch (error) {
+                console.error('アンサー処理エラー:', error);
+            }
+        }
+
+        // 新しいユーザーへの接続開始
+        async function initiateConnection(remoteUserId) {
+            try {
+                const peerConnection = await setupWebRTC(remoteUserId);
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                
+                // オファーをFirebaseに送信
+                await database.ref(`webrtc_offers/${remoteUserId}/${currentUser.id}`).set({
+                    sdp: offer,
+                    timestamp: Date.now()
+                });
+                
+                console.log(`${remoteUserId}にオファーを送信しました`);
+            } catch (error) {
+                console.error('接続開始エラー:', error);
+            }
         }
 
         // リモート音声セットアップ
@@ -1101,8 +1208,8 @@
             console.log(`${userId}の音声ストリームを設定しました`);
         }
 
-        // 空間音声の計算
-        function calculateSpatialAudio(userId) {
+        // 高度な空間音声システム
+        function calculateAdvancedSpatialAudio(userId) {
             if (!users[userId] || !currentUser) return;
             
             const user = users[userId];
@@ -1111,18 +1218,136 @@
                 Math.pow(user.y - currentUser.y, 2)
             );
             
-            // 距離に基づく音量調整
+            // 距離に基づく音量調整（より自然な減衰）
             const maxDistance = voiceRangeDistance;
-            const volume = Math.max(0, Math.min(1, 1 - (distance / maxDistance)));
-            const finalVolume = volume * masterVolume;
+            let volume = 0;
+            
+            if (distance < maxDistance) {
+                // 対数的減衰でより自然な音量調整
+                volume = Math.pow(1 - (distance / maxDistance), 1.5);
+            }
+            
+            const finalVolume = Math.max(0, Math.min(1, volume * masterVolume));
             
             // 音声要素の音量を調整
             const audioElement = document.getElementById(`audio-${userId}`);
             if (audioElement) {
                 audioElement.volume = finalVolume;
+                
+                // 3D音響効果の追加
+                if (audioElement.audioContext) {
+                    const pannerNode = audioElement.pannerNode;
+                    if (pannerNode) {
+                        // 3D位置の設定
+                        const x = (user.x - currentUser.x) / 100;
+                        const y = 0; // 2D平面なのでY軸は0
+                        const z = (user.y - currentUser.y) / 100;
+                        
+                        pannerNode.setPosition(x, y, z);
+                    }
+                }
             }
             
+            // 音声インジケーターの更新
+            updateAudioIndicator(userId, finalVolume, distance);
+            
             return finalVolume;
+        }
+
+        // 音声インジケーター更新
+        function updateAudioIndicator(userId, volume, distance) {
+            const avatar = elements.officeFloor.querySelector(`[data-user-id="${userId}"]`);
+            if (avatar) {
+                const circle = avatar.querySelector('.avatar-circle');
+                if (circle) {
+                    // 音量に応じた視覚効果
+                    const opacity = Math.max(0.3, volume);
+                    circle.style.borderColor = `rgba(245, 158, 11, ${opacity})`;
+                    
+                    // 距離に応じたサイズ調整
+                    const scale = Math.max(0.8, 1 - (distance / voiceRangeDistance) * 0.2);
+                    circle.style.transform = `scale(${scale})`;
+                }
+            }
+        }
+
+        // 3D音響効果付きリモート音声セットアップ
+        function setupAdvancedRemoteAudio(userId, stream) {
+            // 既存の音声要素を削除
+            const existingAudio = document.getElementById(`audio-${userId}`);
+            if (existingAudio) {
+                existingAudio.remove();
+            }
+            
+            // 新しい音声要素を作成
+            const audio = document.createElement('audio');
+            audio.id = `audio-${userId}`;
+            audio.srcObject = stream;
+            audio.autoplay = true;
+            audio.volume = masterVolume;
+            
+            try {
+                // Web Audio APIを使用した3D音響効果
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(stream);
+                const pannerNode = audioContext.createPanner();
+                const gainNode = audioContext.createGain();
+                
+                // 3D音響設定
+                pannerNode.panningModel = 'HRTF';
+                pannerNode.distanceModel = 'inverse';
+                pannerNode.refDistance = 1;
+                pannerNode.maxDistance = 10;
+                pannerNode.rolloffFactor = 1;
+                pannerNode.coneInnerAngle = 360;
+                pannerNode.coneOuterAngle = 0;
+                pannerNode.coneOuterGain = 0;
+                
+                // 音声パイプライン構築
+                source.connect(gainNode);
+                gainNode.connect(pannerNode);
+                pannerNode.connect(audioContext.destination);
+                
+                // オーディオコンテキストを音声要素に保存
+                audio.audioContext = audioContext;
+                audio.pannerNode = pannerNode;
+                audio.gainNode = gainNode;
+                
+                console.log(`${userId}の3D音響効果を設定しました`);
+                
+            } catch (error) {
+                console.log('3D音響効果の設定に失敗、通常の音声を使用:', error);
+            }
+            
+            elements.audioElements.appendChild(audio);
+            
+            // 初期音量設定
+            calculateAdvancedSpatialAudio(userId);
+        }
+
+        // 音声品質最適化
+        function optimizeAudioQuality() {
+            if (localStream) {
+                const audioTrack = localStream.getAudioTracks()[0];
+                if (audioTrack) {
+                    // 高品質音声設定
+                    const constraints = {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 44100,
+                        channelCount: 1,
+                        volume: 1.0
+                    };
+                    
+                    audioTrack.applyConstraints(constraints).then(() => {
+                        console.log('音声品質を最適化しました');
+                        showNotification('🎵 音声品質を最適化しました');
+                    }).catch(error => {
+                        console.log('音声品質最適化に失敗:', error);
+                    });
+                }
+            }
         }
 
         // ユーティリティ関数
@@ -1264,6 +1489,11 @@
                 return;
             }
 
+            // 音声品質最適化
+            setTimeout(() => {
+                optimizeAudioQuality();
+            }, 1000);
+
             try {
                 // ユーザー情報作成
                 const userId = generateUserId();
@@ -1286,9 +1516,12 @@
                         ...currentUser,
                         lastActive: firebase.database.ServerValue.TIMESTAMP
                     });
+                    
+                    showNotification('🎉 音声通話対応バーチャルオフィスに参加しました！');
                 } else {
                     users[userId] = currentUser;
                     addDemoUsers();
+                    showNotification('🎯 デモモードで音声通話をテストできます');
                 }
 
                 showOffice();
@@ -1333,30 +1566,27 @@
         function startRealtimeUpdates() {
             if (isFirebaseEnabled) {
                 const usersRef = database.ref('users');
+                
+                // ユーザー一覧監視
                 usersRef.on('value', (snapshot) => {
                     const newUsers = snapshot.val() || {};
+                    const previousUsers = { ...users };
                     
-                    // 新規ユーザーのWebRTC接続
+                    // 新規ユーザーのWebRTC接続開始
                     Object.keys(newUsers).forEach(userId => {
-                        if (userId !== currentUser.id && !peerConnections[userId]) {
-                            setupWebRTC(userId);
+                        if (userId !== currentUser.id && !previousUsers[userId] && !peerConnections[userId]) {
+                            console.log(`新しいユーザー ${userId} が参加しました`);
+                            setTimeout(() => {
+                                initiateConnection(userId);
+                            }, 1000); // 1秒後に接続開始
                         }
                     });
                     
                     // 退出ユーザーのクリーンアップ
-                    Object.keys(users).forEach(userId => {
+                    Object.keys(previousUsers).forEach(userId => {
                         if (!newUsers[userId] && userId !== currentUser.id) {
-                            if (peerConnections[userId]) {
-                                peerConnections[userId].close();
-                                delete peerConnections[userId];
-                            }
-                            if (remoteStreams[userId]) {
-                                delete remoteStreams[userId];
-                            }
-                            const audioElement = document.getElementById(`audio-${userId}`);
-                            if (audioElement) {
-                                audioElement.remove();
-                            }
+                            console.log(`ユーザー ${userId} が退出しました`);
+                            cleanupPeerConnection(userId);
                         }
                     });
                     
@@ -1364,6 +1594,9 @@
                     updateUserDisplay();
                     updateAllAudioVolumes();
                 });
+
+                // WebRTCシグナリング開始
+                initializeWebRTCSignaling();
 
                 // 定期的にアクティブ状態更新
                 setInterval(() => {
@@ -1385,6 +1618,22 @@
                     updateUserDisplay();
                 }, 2000);
             }
+        }
+
+        // PeerConnection のクリーンアップ
+        function cleanupPeerConnection(userId) {
+            if (peerConnections[userId]) {
+                peerConnections[userId].close();
+                delete peerConnections[userId];
+            }
+            if (remoteStreams[userId]) {
+                delete remoteStreams[userId];
+            }
+            const audioElement = document.getElementById(`audio-${userId}`);
+            if (audioElement) {
+                audioElement.remove();
+            }
+            showNotification(`👋 ${users[userId]?.nickname || 'ユーザー'}が退出しました`);
         }
 
         // ユーザー表示更新
