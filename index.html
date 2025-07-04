@@ -1,0 +1,1773 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>バーチャルオフィス - 音声通話対応</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f8fafc;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* 入室画面 */
+        .entry-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .entry-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .entry-card h1 {
+            font-size: 32px;
+            color: #1e293b;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        .entry-card p {
+            color: #64748b;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+
+        .nickname-input {
+            width: 100%;
+            padding: 16px 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.2s;
+            margin-bottom: 10px;
+        }
+
+        .nickname-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .char-count {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-bottom: 20px;
+        }
+
+        .join-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .join-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3);
+        }
+
+        .join-btn:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .mic-permission {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #0369a1;
+        }
+
+        /* メインオフィス空間 */
+        .office-container {
+            display: none;
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            background: #f1f5f9;
+        }
+
+        /* トップバー */
+        .top-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 70px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 100;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-avatar-header {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 16px;
+            position: relative;
+        }
+
+        .mic-indicator {
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid white;
+            background: #10b981;
+            transition: all 0.2s;
+        }
+
+        .mic-indicator.muted {
+            background: #ef4444;
+        }
+
+        .mic-indicator.speaking {
+            background: #f59e0b;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        .user-details h3 {
+            font-size: 14px;
+            color: #1e293b;
+            margin: 0;
+        }
+
+        .user-details p {
+            font-size: 12px;
+            color: #64748b;
+            margin: 0;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .control-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .status-btn {
+            background: #10b981;
+            color: white;
+        }
+
+        .status-btn.away { background: #f59e0b; }
+        .status-btn.meeting { background: #ef4444; }
+        .status-btn.focus { background: #8b5cf6; }
+
+        .mic-btn {
+            background: #10b981;
+            color: white;
+            position: relative;
+        }
+
+        .mic-btn.muted {
+            background: #ef4444;
+        }
+
+        .mic-btn.speaking {
+            background: #f59e0b;
+            animation: pulse 1s infinite;
+        }
+
+        .volume-btn {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .leave-btn {
+            background: #64748b;
+            color: white;
+        }
+
+        .control-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        /* 音声レベル表示 */
+        .audio-level {
+            position: absolute;
+            bottom: -3px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 30px;
+            height: 3px;
+            background: #e2e8f0;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .audio-level-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981, #f59e0b, #ef4444);
+            border-radius: 2px;
+            transition: width 0.1s ease;
+            width: 0%;
+        }
+
+        /* オフィス空間 */
+        .office-space {
+            width: 100%;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
+            background: #f8fafc;
+            cursor: move;
+        }
+
+        .office-floor {
+            width: 1400px;
+            height: 900px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+            border: 1px solid #e2e8f0;
+        }
+
+        /* オフィス家具 */
+        .desk {
+            position: absolute;
+            background: #8b5cf6;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+        }
+
+        .desk:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+        }
+
+        .meeting-room {
+            position: absolute;
+            background: #ef4444;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
+        }
+
+        .meeting-room:hover {
+            transform: scale(1.02);
+            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+        }
+
+        .lounge {
+            position: absolute;
+            background: #10b981;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+        }
+
+        .lounge:hover {
+            transform: scale(1.02);
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+        }
+
+        /* ユーザーアバター */
+        .user-avatar {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 10;
+            cursor: pointer;
+        }
+
+        .avatar-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+            border: 3px solid white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            position: relative;
+        }
+
+        .avatar-circle.my-avatar {
+            border-color: #f59e0b;
+            box-shadow: 0 0 0 2px #f59e0b, 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .avatar-circle.speaking {
+            animation: pulse 1s infinite;
+            border-color: #f59e0b;
+        }
+
+        .status-indicator {
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid white;
+        }
+
+        .status-available { background: #10b981; }
+        .status-away { background: #f59e0b; }
+        .status-meeting { background: #ef4444; }
+        .status-focus { background: #8b5cf6; }
+
+        .avatar-mic-indicator {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid white;
+            background: #10b981;
+            transition: all 0.2s;
+        }
+
+        .avatar-mic-indicator.muted {
+            background: #ef4444;
+        }
+
+        .avatar-mic-indicator.speaking {
+            background: #f59e0b;
+            animation: pulse 1s infinite;
+        }
+
+        .avatar-name {
+            margin-top: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #1e293b;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 2px 8px;
+            border-radius: 8px;
+            white-space: nowrap;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 音声範囲表示 */
+        .voice-range {
+            position: absolute;
+            border: 2px dashed #3b82f6;
+            border-radius: 50%;
+            background: rgba(59, 130, 246, 0.1);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .voice-range.active {
+            opacity: 1;
+        }
+
+        /* 参加者リスト */
+        .participants-panel {
+            position: fixed;
+            right: 20px;
+            top: 90px;
+            width: 280px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e2e8f0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .panel-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e2e8f0;
+            font-weight: 600;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .participant-item {
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid #f1f5f9;
+            transition: background 0.2s;
+        }
+
+        .participant-item:hover {
+            background: #f8fafc;
+        }
+
+        .participant-item:last-child {
+            border-bottom: none;
+        }
+
+        .participant-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 12px;
+            position: relative;
+        }
+
+        .participant-info {
+            flex: 1;
+        }
+
+        .participant-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: #1e293b;
+            margin: 0;
+        }
+
+        .participant-status {
+            font-size: 12px;
+            color: #64748b;
+            margin: 0;
+        }
+
+        .participant-volume {
+            width: 40px;
+            height: 4px;
+            background: #e2e8f0;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 2px;
+        }
+
+        .participant-volume-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981, #f59e0b, #ef4444);
+            border-radius: 2px;
+            transition: width 0.1s ease;
+            width: 0%;
+        }
+
+        /* 音声設定パネル */
+        .audio-settings {
+            position: fixed;
+            top: 90px;
+            left: 20px;
+            width: 280px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e2e8f0;
+            padding: 16px;
+            display: none;
+        }
+
+        .audio-settings.show {
+            display: block;
+        }
+
+        .audio-setting-item {
+            margin-bottom: 16px;
+        }
+
+        .audio-setting-label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+
+        .audio-slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #e2e8f0;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .audio-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+        }
+
+        .audio-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            border: none;
+        }
+
+        /* ズーム・パンコントロール */
+        .zoom-controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .zoom-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 8px;
+            background: white;
+            color: #64748b;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .zoom-btn:hover {
+            background: #f8fafc;
+            color: #1e293b;
+        }
+
+        /* 通知 */
+        .notification {
+            position: fixed;
+            top: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1f2937;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 1000;
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .notification.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* モバイル対応 */
+        @media (max-width: 768px) {
+            .participants-panel {
+                position: fixed;
+                bottom: 0;
+                right: 0;
+                left: 0;
+                width: 100%;
+                max-height: 40vh;
+                border-radius: 12px 12px 0 0;
+            }
+
+            .audio-settings {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                width: 100%;
+                border-radius: 12px 12px 0 0;
+            }
+
+            .office-floor {
+                width: 120%;
+                height: 120%;
+            }
+
+            .top-bar {
+                padding: 0 15px;
+            }
+
+            .controls {
+                gap: 5px;
+            }
+
+            .control-btn {
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+        }
+
+        /* アニメーション */
+        @keyframes joinAnimation {
+            0% {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .user-avatar.joining {
+            animation: joinAnimation 0.5s ease-out;
+        }
+
+        /* ローディング */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+
+        .loading-content {
+            text-align: center;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- ローディング画面 -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <p>音声デバイスを準備中...</p>
+        </div>
+    </div>
+
+    <!-- 入室画面 -->
+    <div class="entry-screen" id="entryScreen">
+        <div class="entry-card">
+            <h1>🎤 Virtual Office</h1>
+            <p>音声通話対応バーチャルオフィス</p>
+            <div class="mic-permission">
+                🎤 マイクへのアクセス許可が必要です。ブラウザの許可ボタンをクリックしてください。
+            </div>
+            <input type="text" class="nickname-input" id="nicknameInput" placeholder="あなたの名前を入力" maxlength="10">
+            <div class="char-count">
+                <span id="charCount">0</span>/10文字
+            </div>
+            <button class="join-btn" id="joinBtn" disabled>オフィスに参加</button>
+        </div>
+    </div>
+
+    <!-- メインオフィス空間 -->
+    <div class="office-container" id="officeContainer">
+        <!-- トップバー -->
+        <div class="top-bar">
+            <div class="user-info">
+                <div class="user-avatar-header" id="userAvatarHeader">
+                    <div class="mic-indicator" id="micIndicator"></div>
+                    <div class="audio-level">
+                        <div class="audio-level-fill" id="audioLevelFill"></div>
+                    </div>
+                </div>
+                <div class="user-details">
+                    <h3 id="userNameHeader"></h3>
+                    <p>音声通話対応</p>
+                </div>
+            </div>
+            <div class="controls">
+                <button class="control-btn status-btn" id="statusBtn">🟢 在席</button>
+                <button class="control-btn mic-btn" id="micBtn">🎤 マイクON</button>
+                <button class="control-btn volume-btn" id="volumeBtn">🔊 音量</button>
+                <button class="control-btn leave-btn" id="leaveBtn">退出</button>
+            </div>
+        </div>
+
+        <!-- 音声設定パネル -->
+        <div class="audio-settings" id="audioSettings">
+            <div class="panel-header">🎧 音声設定</div>
+            <div class="audio-setting-item">
+                <label class="audio-setting-label">マイク感度</label>
+                <input type="range" class="audio-slider" id="micSensitivity" min="0" max="100" value="50">
+            </div>
+            <div class="audio-setting-item">
+                <label class="audio-setting-label">マスターボリューム</label>
+                <input type="range" class="audio-slider" id="masterVolume" min="0" max="100" value="50">
+            </div>
+            <div class="audio-setting-item">
+                <label class="audio-setting-label">通話範囲 (メートル)</label>
+                <input type="range" class="audio-slider" id="voiceRange" min="50" max="300" value="150">
+            </div>
+        </div>
+
+        <!-- オフィス空間 -->
+        <div class="office-space" id="officeSpace">
+            <div class="office-floor" id="officeFloor">
+                <!-- デスクエリア -->
+                <div class="desk" style="top: 100px; left: 100px; width: 80px; height: 60px;">Desk 1</div>
+                <div class="desk" style="top: 100px; left: 200px; width: 80px; height: 60px;">Desk 2</div>
+                <div class="desk" style="top: 100px; left: 300px; width: 80px; height: 60px;">Desk 3</div>
+                <div class="desk" style="top: 200px; left: 100px; width: 80px; height: 60px;">Desk 4</div>
+                <div class="desk" style="top: 200px; left: 200px; width: 80px; height: 60px;">Desk 5</div>
+                <div class="desk" style="top: 200px; left: 300px; width: 80px; height: 60px;">Desk 6</div>
+
+                <!-- 会議室 -->
+                <div class="meeting-room" style="top: 100px; right: 100px; width: 200px; height: 150px;">
+                    📋 Meeting Room A
+                </div>
+                <div class="meeting-room" style="top: 300px; right: 100px; width: 200px; height: 150px;">
+                    💼 Meeting Room B
+                </div>
+
+                <!-- ラウンジエリア -->
+                <div class="lounge" style="bottom: 100px; left: 100px; width: 300px; height: 120px;">
+                    ☕ Coffee Lounge
+                </div>
+
+                <!-- 音声範囲表示 -->
+                <div class="voice-range" id="voiceRange"></div>
+            </div>
+        </div>
+
+        <!-- 参加者パネル -->
+        <div class="participants-panel">
+            <div class="panel-header">
+                🎤 参加者 (<span id="participantCount">0</span>人)
+            </div>
+            <div id="participantsList"></div>
+        </div>
+
+        <!-- ズーム・パンコントロール -->
+        <div class="zoom-controls">
+            <button class="zoom-btn" id="zoomInBtn">+</button>
+            <button class="zoom-btn" id="zoomOutBtn">-</button>
+            <button class="zoom-btn" id="resetViewBtn">⌂</button>
+        </div>
+    </div>
+
+    <!-- 隠れた音声要素 -->
+    <div id="audioElements"></div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <script>
+        // Firebase設定
+        const firebaseConfig = {
+    apiKey: "AIzaSyABTIK8Xwj0fcdWL2T7Z2le9_UDoXdu10U",
+    authDomain: "virtual-office-team.firebaseapp.com",
+    databaseURL: "https://virtual-office-team-default-rtdb.asia-southeast1.firebasedatabase.app/",
+    projectId: "virtual-office-team",
+    storageBucket: "virtual-office-team.firebasestorage.app",
+    messagingSenderId: "904879677778",
+    appId: "1:904879677778:web:ac4c511b383b02c4b35a8b"
+};
+
+        // Firebase初期化
+        let database = null;
+        let isFirebaseEnabled = false;
+
+        if (firebaseConfig.apiKey !== "your-api-key-here") {
+            try {
+                firebase.initializeApp(firebaseConfig);
+                database = firebase.database();
+                isFirebaseEnabled = true;
+                console.log('Firebase接続成功 - リアルタイム音声通話が利用可能');
+            } catch (error) {
+                console.log('Firebase接続失敗、ローカルモードで動作:', error);
+            }
+        }
+
+        // 音声関連の変数
+        let localStream = null;
+        let audioContext = null;
+        let analyser = null;
+        let microphone = null;
+        let dataArray = null;
+        let isMicOn = false;
+        let masterVolume = 0.5;
+        let micSensitivity = 0.5;
+        let voiceRangeDistance = 150;
+        let isAudioInitialized = false;
+        let peerConnections = {};
+        let remoteStreams = {};
+
+        // アプリケーション状態
+        let currentUser = null;
+        let users = {};
+        let currentStatus = 'available';
+        let currentZoom = 1;
+        let panX = 0;
+        let panY = 0;
+
+        // DOM要素
+        const elements = {
+            entryScreen: document.getElementById('entryScreen'),
+            officeContainer: document.getElementById('officeContainer'),
+            loadingScreen: document.getElementById('loadingScreen'),
+            nicknameInput: document.getElementById('nicknameInput'),
+            charCount: document.getElementById('charCount'),
+            joinBtn: document.getElementById('joinBtn'),
+            userAvatarHeader: document.getElementById('userAvatarHeader'),
+            userNameHeader: document.getElementById('userNameHeader'),
+            statusBtn: document.getElementById('statusBtn'),
+            micBtn: document.getElementById('micBtn'),
+            volumeBtn: document.getElementById('volumeBtn'),
+            leaveBtn: document.getElementById('leaveBtn'),
+            officeSpace: document.getElementById('officeSpace'),
+            officeFloor: document.getElementById('officeFloor'),
+            participantCount: document.getElementById('participantCount'),
+            participantsList: document.getElementById('participantsList'),
+            zoomInBtn: document.getElementById('zoomInBtn'),
+            zoomOutBtn: document.getElementById('zoomOutBtn'),
+            resetViewBtn: document.getElementById('resetViewBtn'),
+            micIndicator: document.getElementById('micIndicator'),
+            audioLevelFill: document.getElementById('audioLevelFill'),
+            audioSettings: document.getElementById('audioSettings'),
+            micSensitivity: document.getElementById('micSensitivity'),
+            masterVolume: document.getElementById('masterVolume'),
+            voiceRange: document.getElementById('voiceRange'),
+            voiceRangeSlider: document.getElementById('voiceRange'),
+            audioElements: document.getElementById('audioElements')
+        };
+
+        // 音声初期化
+        async function initializeAudio() {
+            try {
+                showLoading();
+                
+                // マイクアクセス許可
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 44100
+                    }
+                });
+
+                // 音声分析のセットアップ
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                microphone = audioContext.createMediaStreamSource(localStream);
+                
+                analyser.fftSize = 256;
+                const bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+                
+                microphone.connect(analyser);
+                
+                isMicOn = true;
+                isAudioInitialized = true;
+                
+                console.log('音声デバイス初期化成功');
+                showNotification('🎤 音声デバイスが準備できました！');
+                
+                // 音声レベル監視開始
+                startAudioLevelMonitoring();
+                
+                hideLoading();
+                return true;
+                
+            } catch (error) {
+                console.error('音声デバイス初期化失敗:', error);
+                showNotification('❌ マイクへのアクセスが拒否されました。ブラウザの設定を確認してください。');
+                hideLoading();
+                return false;
+            }
+        }
+
+        // 音声レベル監視
+        function startAudioLevelMonitoring() {
+            if (!analyser || !dataArray) return;
+            
+            function updateAudioLevel() {
+                analyser.getByteFrequencyData(dataArray);
+                
+                // 音声レベル計算
+                let sum = 0;
+                for (let i = 0; i < dataArray.length; i++) {
+                    sum += dataArray[i];
+                }
+                const average = sum / dataArray.length;
+                const level = Math.min(100, (average / 255) * 100 * (micSensitivity * 2));
+                
+                // UI更新
+                elements.audioLevelFill.style.width = level + '%';
+                
+                // 話し中判定
+                const isSpeaking = level > 10;
+                updateSpeakingState(isSpeaking);
+                
+                // 自分の音声レベルをデータベースに送信
+                if (currentUser && isFirebaseEnabled) {
+                    database.ref(`users/${currentUser.id}`).update({
+                        audioLevel: level,
+                        isSpeaking: isSpeaking
+                    });
+                }
+                
+                requestAnimationFrame(updateAudioLevel);
+            }
+            
+            updateAudioLevel();
+        }
+
+        // 話し中状態更新
+        function updateSpeakingState(isSpeaking) {
+            elements.micIndicator.classList.toggle('speaking', isSpeaking && isMicOn);
+            elements.micBtn.classList.toggle('speaking', isSpeaking && isMicOn);
+            
+            const myAvatar = elements.officeFloor.querySelector(`[data-user-id="${currentUser?.id}"]`);
+            if (myAvatar) {
+                const circle = myAvatar.querySelector('.avatar-circle');
+                const micIndicator = myAvatar.querySelector('.avatar-mic-indicator');
+                if (circle) circle.classList.toggle('speaking', isSpeaking && isMicOn);
+                if (micIndicator) micIndicator.classList.toggle('speaking', isSpeaking && isMicOn);
+            }
+        }
+
+        // WebRTC接続のセットアップ
+        async function setupWebRTC(remoteUserId) {
+            if (!isFirebaseEnabled) return;
+            
+            const peerConnection = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            });
+            
+            peerConnections[remoteUserId] = peerConnection;
+            
+            // ローカルストリーム追加
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+            }
+            
+            // リモートストリーム受信
+            peerConnection.ontrack = (event) => {
+                const remoteStream = event.streams[0];
+                remoteStreams[remoteUserId] = remoteStream;
+                setupRemoteAudio(remoteUserId, remoteStream);
+            };
+            
+            // ICE候補の処理
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    database.ref(`webrtc/${currentUser.id}/${remoteUserId}/candidates`).push({
+                        candidate: event.candidate,
+                        timestamp: Date.now()
+                    });
+                }
+            };
+            
+            return peerConnection;
+        }
+
+        // リモート音声セットアップ
+        function setupRemoteAudio(userId, stream) {
+            // 既存の音声要素を削除
+            const existingAudio = document.getElementById(`audio-${userId}`);
+            if (existingAudio) {
+                existingAudio.remove();
+            }
+            
+            // 新しい音声要素を作成
+            const audio = document.createElement('audio');
+            audio.id = `audio-${userId}`;
+            audio.srcObject = stream;
+            audio.autoplay = true;
+            audio.volume = masterVolume;
+            
+            elements.audioElements.appendChild(audio);
+            
+            console.log(`${userId}の音声ストリームを設定しました`);
+        }
+
+        // 空間音声の計算
+        function calculateSpatialAudio(userId) {
+            if (!users[userId] || !currentUser) return;
+            
+            const user = users[userId];
+            const distance = Math.sqrt(
+                Math.pow(user.x - currentUser.x, 2) + 
+                Math.pow(user.y - currentUser.y, 2)
+            );
+            
+            // 距離に基づく音量調整
+            const maxDistance = voiceRangeDistance;
+            const volume = Math.max(0, Math.min(1, 1 - (distance / maxDistance)));
+            const finalVolume = volume * masterVolume;
+            
+            // 音声要素の音量を調整
+            const audioElement = document.getElementById(`audio-${userId}`);
+            if (audioElement) {
+                audioElement.volume = finalVolume;
+            }
+            
+            return finalVolume;
+        }
+
+        // ユーティリティ関数
+        function generateUserId() {
+            return 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function getRandomColor() {
+            const colors = [
+                'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+                'linear-gradient(135deg, #10b981, #059669)',
+                'linear-gradient(135deg, #f59e0b, #d97706)',
+                'linear-gradient(135deg, #ef4444, #dc2626)',
+                'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+                'linear-gradient(135deg, #06b6d4, #0891b2)'
+            ];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        // イベントリスナー設定
+        function setupEventListeners() {
+            // ニックネーム入力
+            elements.nicknameInput.addEventListener('input', updateCharCount);
+            elements.nicknameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !elements.joinBtn.disabled) {
+                    joinOffice();
+                }
+            });
+
+            // 参加ボタン
+            elements.joinBtn.addEventListener('click', joinOffice);
+
+            // コントロール
+            elements.statusBtn.addEventListener('click', toggleStatus);
+            elements.micBtn.addEventListener('click', toggleMic);
+            elements.volumeBtn.addEventListener('click', toggleAudioSettings);
+            elements.leaveBtn.addEventListener('click', leaveOffice);
+
+            // オフィス内移動
+            elements.officeFloor.addEventListener('click', moveToPosition);
+
+            // ズーム・パンコントロール
+            elements.zoomInBtn.addEventListener('click', () => zoomOffice(1.2));
+            elements.zoomOutBtn.addEventListener('click', () => zoomOffice(0.8));
+            elements.resetViewBtn.addEventListener('click', resetView);
+
+            // マウスホイールでズーム
+            elements.officeSpace.addEventListener('wheel', handleWheel);
+
+            // 音声設定
+            elements.micSensitivity.addEventListener('input', (e) => {
+                micSensitivity = e.target.value / 100;
+            });
+            
+            elements.masterVolume.addEventListener('input', (e) => {
+                masterVolume = e.target.value / 100;
+                updateAllAudioVolumes();
+            });
+            
+            elements.voiceRangeSlider.addEventListener('input', (e) => {
+                voiceRangeDistance = parseInt(e.target.value);
+                updateVoiceRangeDisplay();
+            });
+
+            // ドラッグでパン
+            let isDragging = false;
+            let lastX, lastY;
+
+            elements.officeSpace.addEventListener('mousedown', (e) => {
+                if (e.target === elements.officeSpace || e.target === elements.officeFloor) {
+                    isDragging = true;
+                    lastX = e.clientX;
+                    lastY = e.clientY;
+                    elements.officeSpace.style.cursor = 'grabbing';
+                }
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    const deltaX = e.clientX - lastX;
+                    const deltaY = e.clientY - lastY;
+                    panX += deltaX;
+                    panY += deltaY;
+                    updateTransform();
+                    lastX = e.clientX;
+                    lastY = e.clientY;
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    elements.officeSpace.style.cursor = 'move';
+                }
+            });
+        }
+
+        // 全音声音量更新
+        function updateAllAudioVolumes() {
+            Object.keys(users).forEach(userId => {
+                if (userId !== currentUser?.id) {
+                    calculateSpatialAudio(userId);
+                }
+            });
+        }
+
+        // 音声範囲表示更新
+        function updateVoiceRangeDisplay() {
+            if (!currentUser) return;
+            
+            const range = elements.voiceRange;
+            const diameter = voiceRangeDistance * 2;
+            
+            range.style.width = diameter + 'px';
+            range.style.height = diameter + 'px';
+            range.style.left = (currentUser.x - voiceRangeDistance + 25) + 'px';
+            range.style.top = (currentUser.y - voiceRangeDistance + 25) + 'px';
+        }
+
+        // 文字数カウント更新
+        function updateCharCount() {
+            const length = elements.nicknameInput.value.length;
+            elements.charCount.textContent = length;
+            elements.joinBtn.disabled = length === 0 || length > 10;
+        }
+
+        // オフィス参加
+        async function joinOffice() {
+            const nickname = elements.nicknameInput.value.trim();
+            if (!nickname || nickname.length > 10) {
+                alert('名前は1-10文字で入力してください');
+                return;
+            }
+
+            // 音声初期化
+            const audioSuccess = await initializeAudio();
+            if (!audioSuccess) {
+                alert('音声デバイスの初期化に失敗しました。マイクの許可を確認してください。');
+                return;
+            }
+
+            try {
+                // ユーザー情報作成
+                const userId = generateUserId();
+                currentUser = {
+                    id: userId,
+                    nickname: nickname,
+                    x: 500 + Math.random() * 200,
+                    y: 300 + Math.random() * 200,
+                    status: 'available',
+                    micOn: true,
+                    color: getRandomColor(),
+                    joinedAt: Date.now(),
+                    audioLevel: 0,
+                    isSpeaking: false
+                };
+
+                // Firebaseまたはローカルストレージに保存
+                if (isFirebaseEnabled) {
+                    await database.ref(`users/${userId}`).set({
+                        ...currentUser,
+                        lastActive: firebase.database.ServerValue.TIMESTAMP
+                    });
+                } else {
+                    users[userId] = currentUser;
+                    addDemoUsers();
+                }
+
+                showOffice();
+                startRealtimeUpdates();
+                updateVoiceRangeDisplay();
+
+            } catch (error) {
+                console.error('参加エラー:', error);
+                alert('オフィスへの参加に失敗しました: ' + error.message);
+                hideLoading();
+            }
+        }
+
+        // デモユーザー追加
+        function addDemoUsers() {
+            const demoUsers = [
+                { nickname: 'AI Assistant', status: 'available', x: 300, y: 200 },
+                { nickname: 'Team Lead', status: 'meeting', x: 800, y: 350 },
+                { nickname: 'Designer', status: 'focus', x: 600, y: 500 }
+            ];
+
+            demoUsers.forEach((demo, index) => {
+                const demoId = 'demo_' + index;
+                users[demoId] = {
+                    id: demoId,
+                    nickname: demo.nickname,
+                    x: demo.x,
+                    y: demo.y,
+                    status: demo.status,
+                    micOn: Math.random() > 0.3,
+                    color: getRandomColor(),
+                    joinedAt: Date.now() - Math.random() * 60000,
+                    audioLevel: Math.random() * 50,
+                    isSpeaking: Math.random() > 0.7
+                };
+            });
+
+            updateUserDisplay();
+        }
+
+        // リアルタイム更新開始
+        function startRealtimeUpdates() {
+            if (isFirebaseEnabled) {
+                const usersRef = database.ref('users');
+                usersRef.on('value', (snapshot) => {
+                    const newUsers = snapshot.val() || {};
+                    
+                    // 新規ユーザーのWebRTC接続
+                    Object.keys(newUsers).forEach(userId => {
+                        if (userId !== currentUser.id && !peerConnections[userId]) {
+                            setupWebRTC(userId);
+                        }
+                    });
+                    
+                    // 退出ユーザーのクリーンアップ
+                    Object.keys(users).forEach(userId => {
+                        if (!newUsers[userId] && userId !== currentUser.id) {
+                            if (peerConnections[userId]) {
+                                peerConnections[userId].close();
+                                delete peerConnections[userId];
+                            }
+                            if (remoteStreams[userId]) {
+                                delete remoteStreams[userId];
+                            }
+                            const audioElement = document.getElementById(`audio-${userId}`);
+                            if (audioElement) {
+                                audioElement.remove();
+                            }
+                        }
+                    });
+                    
+                    users = newUsers;
+                    updateUserDisplay();
+                    updateAllAudioVolumes();
+                });
+
+                // 定期的にアクティブ状態更新
+                setInterval(() => {
+                    if (currentUser) {
+                        database.ref(`users/${currentUser.id}`).update({
+                            lastActive: firebase.database.ServerValue.TIMESTAMP
+                        });
+                    }
+                }, 30000);
+            } else {
+                // デモモード用の音声シミュレーション
+                setInterval(() => {
+                    Object.keys(users).forEach(userId => {
+                        if (userId !== currentUser?.id) {
+                            users[userId].audioLevel = Math.random() * 30;
+                            users[userId].isSpeaking = Math.random() > 0.8;
+                        }
+                    });
+                    updateUserDisplay();
+                }, 2000);
+            }
+        }
+
+        // ユーザー表示更新
+        function updateUserDisplay() {
+            // 既存のアバターを削除
+            const existingAvatars = elements.officeFloor.querySelectorAll('.user-avatar');
+            existingAvatars.forEach(avatar => avatar.remove());
+
+            // ユーザーアバター作成
+            Object.values(users).forEach(user => {
+                createUserAvatar(user);
+            });
+
+            // 参加者リスト更新
+            updateParticipantsList();
+        }
+
+        // ユーザーアバター作成
+        function createUserAvatar(user) {
+            const avatar = document.createElement('div');
+            avatar.className = 'user-avatar';
+            if (user.id === currentUser?.id) {
+                avatar.classList.add('joining');
+            }
+            avatar.style.left = user.x + 'px';
+            avatar.style.top = user.y + 'px';
+            avatar.setAttribute('data-user-id', user.id);
+
+            const circle = document.createElement('div');
+            circle.className = 'avatar-circle';
+            if (user.id === currentUser?.id) {
+                circle.classList.add('my-avatar');
+            }
+            if (user.isSpeaking && user.micOn) {
+                circle.classList.add('speaking');
+            }
+            circle.style.background = user.color;
+            circle.textContent = user.nickname.charAt(0).toUpperCase();
+
+            const statusIndicator = document.createElement('div');
+            statusIndicator.className = `status-indicator status-${user.status}`;
+
+            const micIndicator = document.createElement('div');
+            micIndicator.className = 'avatar-mic-indicator';
+            if (!user.micOn) {
+                micIndicator.classList.add('muted');
+            }
+            if (user.isSpeaking && user.micOn) {
+                micIndicator.classList.add('speaking');
+            }
+
+            const name = document.createElement('div');
+            name.className = 'avatar-name';
+            name.textContent = user.nickname;
+
+            circle.appendChild(statusIndicator);
+            circle.appendChild(micIndicator);
+            avatar.appendChild(circle);
+            avatar.appendChild(name);
+
+            elements.officeFloor.appendChild(avatar);
+        }
+
+        // 参加者リスト更新
+        function updateParticipantsList() {
+            const userCount = Object.keys(users).length;
+            elements.participantCount.textContent = userCount;
+
+            elements.participantsList.innerHTML = '';
+            Object.values(users).forEach(user => {
+                const item = document.createElement('div');
+                item.className = 'participant-item';
+
+                const avatar = document.createElement('div');
+                avatar.className = 'participant-avatar';
+                avatar.style.background = user.color;
+                avatar.textContent = user.nickname.charAt(0).toUpperCase();
+
+                const statusIndicator = document.createElement('div');
+                statusIndicator.className = `status-indicator status-${user.status}`;
+                avatar.appendChild(statusIndicator);
+
+                const micIndicator = document.createElement('div');
+                micIndicator.className = 'avatar-mic-indicator';
+                if (!user.micOn) {
+                    micIndicator.classList.add('muted');
+                }
+                if (user.isSpeaking && user.micOn) {
+                    micIndicator.classList.add('speaking');
+                }
+                avatar.appendChild(micIndicator);
+
+                const info = document.createElement('div');
+                info.className = 'participant-info';
+
+                const name = document.createElement('p');
+                name.className = 'participant-name';
+                name.textContent = user.nickname;
+
+                const status = document.createElement('p');
+                status.className = 'participant-status';
+                status.textContent = getStatusText(user.status);
+
+                const volumeBar = document.createElement('div');
+                volumeBar.className = 'participant-volume';
+                const volumeFill = document.createElement('div');
+                volumeFill.className = 'participant-volume-fill';
+                volumeFill.style.width = (user.audioLevel || 0) + '%';
+                volumeBar.appendChild(volumeFill);
+
+                info.appendChild(name);
+                info.appendChild(status);
+                info.appendChild(volumeBar);
+
+                item.appendChild(avatar);
+                item.appendChild(info);
+                elements.participantsList.appendChild(item);
+            });
+        }
+
+        // ステータステキスト取得
+        function getStatusText(status) {
+            const statusMap = {
+                available: '在席',
+                away: '離席',
+                meeting: 'ミーティング中',
+                focus: '集中中'
+            };
+            return statusMap[status] || '在席';
+        }
+
+        // 位置移動
+        function moveToPosition(event) {
+            if (!currentUser) return;
+
+            const rect = elements.officeFloor.getBoundingClientRect();
+            const x = (event.clientX - rect.left) / currentZoom - 25;
+            const y = (event.clientY - rect.top) / currentZoom - 25;
+
+            // 境界チェック
+            const maxX = elements.officeFloor.clientWidth - 50;
+            const maxY = elements.officeFloor.clientHeight - 50;
+            const finalX = Math.max(0, Math.min(x, maxX));
+            const finalY = Math.max(0, Math.min(y, maxY));
+
+            currentUser.x = finalX;
+            currentUser.y = finalY;
+            users[currentUser.id] = { ...currentUser };
+
+            // 自分のアバター更新
+            const myAvatar = elements.officeFloor.querySelector(`[data-user-id="${currentUser.id}"]`);
+            if (myAvatar) {
+                myAvatar.style.left = finalX + 'px';
+                myAvatar.style.top = finalY + 'px';
+            }
+
+            // 音声範囲表示更新
+            updateVoiceRangeDisplay();
+
+            // 空間音声更新
+            updateAllAudioVolumes();
+
+            // データベース更新
+            if (isFirebaseEnabled) {
+                database.ref(`users/${currentUser.id}`).update({
+                    x: finalX,
+                    y: finalY,
+                    lastActive: firebase.database.ServerValue.TIMESTAMP
+                });
+            }
+        }
+
+        // ステータス切り替え
+        function toggleStatus() {
+            const statuses = ['available', 'away', 'meeting', 'focus'];
+            const currentIndex = statuses.indexOf(currentStatus);
+            const nextIndex = (currentIndex + 1) % statuses.length;
+            currentStatus = statuses[nextIndex];
+
+            const statusEmojis = {
+                available: '🟢 在席',
+                away: '🟡 離席',
+                meeting: '🔴 ミーティング中',
+                focus: '🟣 集中中'
+            };
+
+            const statusClasses = {
+                available: '',
+                away: 'away',
+                meeting: 'meeting',
+                focus: 'focus'
+            };
+
+            elements.statusBtn.textContent = statusEmojis[currentStatus];
+            elements.statusBtn.className = `control-btn status-btn ${statusClasses[currentStatus]}`;
+
+            if (currentUser) {
+                currentUser.status = currentStatus;
+                updateUserStatus();
+            }
+        }
+
+        // マイク切り替え
+        function toggleMic() {
+            isMicOn = !isMicOn;
+            elements.micBtn.textContent = isMicOn ? '🎤 マイクON' : '🔇 マイクOFF';
+            elements.micBtn.classList.toggle('muted', !isMicOn);
+            elements.micIndicator.classList.toggle('muted', !isMicOn);
+
+            // マイクの実際の有効/無効化
+            if (localStream) {
+                localStream.getAudioTracks().forEach(track => {
+                    track.enabled = isMicOn;
+                });
+            }
+
+            if (currentUser) {
+                currentUser.micOn = isMicOn;
+                updateUserStatus();
+            }
+
+            const action = isMicOn ? 'ON' : 'OFF';
+            showNotification(`🎤 マイクを${action}にしました`);
+        }
+
+        // 音声設定切り替え
+        function toggleAudioSettings() {
+            elements.audioSettings.classList.toggle('show');
+        }
+
+        // ユーザーステータス更新
+        function updateUserStatus() {
+            if (isFirebaseEnabled && currentUser) {
+                database.ref(`users/${currentUser.id}`).update({
+                    status: currentUser.status,
+                    micOn: currentUser.micOn,
+                    lastActive: firebase.database.ServerValue.TIMESTAMP
+                });
+            } else if (currentUser) {
+                users[currentUser.id] = { ...currentUser };
+                updateUserDisplay();
+            }
+        }
+
+        // 通知表示
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 100);
+
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // ズーム機能
+        function zoomOffice(factor) {
+            currentZoom = Math.max(0.5, Math.min(2, currentZoom * factor));
+            updateTransform();
+        }
+
+        // ビューリセット
+        function resetView() {
+            currentZoom = 1;
+            panX = 0;
+            panY = 0;
+            updateTransform();
+        }
+
+        // 変形更新
+        function updateTransform() {
+            elements.officeFloor.style.transform = 
+                `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${currentZoom})`;
+        }
+
+        // ホイール処理
+        function handleWheel(event) {
+            event.preventDefault();
+            const delta = event.deltaY > 0 ? 0.9 : 1.1;
+            zoomOffice(delta);
+        }
+
+        // オフィス退出
+        async function leaveOffice() {
+            if (confirm('オフィスから退出しますか？')) {
+                // 音声デバイスのクリーンアップ
+                if (localStream) {
+                    localStream.getTracks().forEach(track => track.stop());
+                }
+                
+                // WebRTC接続のクリーンアップ
+                Object.values(peerConnections).forEach(pc => pc.close());
+                peerConnections = {};
+                remoteStreams = {};
+                
+                // 音声要素のクリーンアップ
+                elements.audioElements.innerHTML = '';
+                
+                if (isFirebaseEnabled && currentUser) {
+                    await database.ref(`users/${currentUser.id}`).remove();
+                }
+                
+                currentUser = null;
+                users = {};
+                hideOffice();
+                showEntry();
+                
+                showNotification('👋 オフィスから退出しました');
+            }
+        }
+
+        // 画面表示制御
+        function showLoading() {
+            elements.loadingScreen.style.display = 'flex';
+        }
+
+        function hideLoading() {
+            elements.loadingScreen.style.display = 'none';
+        }
+
+        function showEntry() {
+            elements.entryScreen.classList.remove('hidden');
+        }
+
+        function showOffice() {
+            hideLoading();
+            elements.entryScreen.classList.add('hidden');
+            elements.officeContainer.style.display = 'block';
+
+            // ヘッダー情報設定
+            elements.userAvatarHeader.textContent = currentUser.nickname.charAt(0).toUpperCase();
+            elements.userAvatarHeader.style.background = currentUser.color;
+            elements.userNameHeader.textContent = currentUser.nickname;
+            
+            // 音声範囲表示を有効化
+            elements.voiceRange.classList.add('active');
+        }
+
+        function hideOffice() {
+            elements.officeContainer.style.display = 'none';
+            elements.audioSettings.classList.remove('show');
+        }
+
+        // 初期化
+        function init() {
+            setupEventListeners();
+            
+            // 保存された名前があれば復元
+            const savedName = localStorage.getItem('virtualOfficeNickname');
+            if (savedName) {
+                elements.nicknameInput.value = savedName;
+                updateCharCount();
+            }
+
+            // ローカルストレージに名前を保存
+            elements.nicknameInput.addEventListener('input', () => {
+                localStorage.setItem('virtualOfficeNickname', elements.nicknameInput.value);
+            });
+
+            // デモモード表示
+            if (!isFirebaseEnabled) {
+                setTimeout(() => {
+                    const demoNotice = document.createElement('div');
+                    demoNotice.style.cssText = `
+                        position: fixed; top: 20px; left: 20px;
+                        background: #f59e0b; color: white;
+                        padding: 8px 12px; border-radius: 6px;
+                        font-size: 12px; z-index: 1001;
+                    `;
+                    demoNotice.textContent = '🎯 デモモード（音声はシミュレーション）';
+                    document.body.appendChild(demoNotice);
+                }, 1000);
+            }
+        }
+
+        // アプリケーション開始
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
