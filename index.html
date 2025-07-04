@@ -385,8 +385,9 @@
         }
 
         .avatar-circle.my-avatar {
-            border-color: #f59e0b;
-            box-shadow: 0 0 0 2px #f59e0b, 0 4px 12px rgba(0, 0, 0, 0.15);
+            border-color: #f59e0b !important;
+            box-shadow: 0 0 0 2px #f59e0b, 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+            z-index: 21 !important;
         }
 
         .avatar-circle.speaking {
@@ -1279,8 +1280,8 @@
                 currentUser = {
                     id: userId,
                     nickname: nickname,
-                    x: 500 + Math.random() * 200,
-                    y: 300 + Math.random() * 200,
+                    x: 400 + Math.random() * 200,
+                    y: 200 + Math.random() * 200,
                     status: 'available',
                     micOn: true,
                     color: getRandomColor(),
@@ -1288,6 +1289,12 @@
                     audioLevel: 0,
                     isSpeaking: false
                 };
+
+                console.log('Created current user:', currentUser);
+
+                // まずローカルのusersオブジェクトに追加
+                users[userId] = currentUser;
+                console.log('Added to users object:', users);
 
                 // Firebaseまたはローカルストレージに保存
                 if (isFirebaseEnabled) {
@@ -1298,13 +1305,20 @@
                     
                     showNotification('🎉 音声通話対応バーチャルオフィスに参加しました！');
                 } else {
-                    users[userId] = currentUser;
                     addDemoUsers();
                     showNotification('🎯 デモモードで音声通話をテストできます');
                 }
 
+                // 画面表示
                 showOffice();
+                
+                // 即座にユーザー表示を更新
+                updateUserDisplay();
+                
+                // リアルタイム更新開始
                 startRealtimeUpdates();
+                
+                // 音声範囲表示
                 updateVoiceRangeDisplay();
 
             } catch (error) {
@@ -1414,43 +1428,62 @@
 
         // ユーザー表示更新
         function updateUserDisplay() {
+            console.log('Updating user display. Current users:', Object.keys(users));
+            console.log('Current user ID:', currentUser?.id);
+            
             // 既存のアバターを削除
             const existingAvatars = elements.officeFloor.querySelectorAll('.user-avatar');
+            console.log('Removing existing avatars:', existingAvatars.length);
             existingAvatars.forEach(avatar => avatar.remove());
 
             // ユーザーアバター作成
             Object.values(users).forEach(user => {
+                console.log('Creating avatar for:', user.nickname, 'ID:', user.id);
                 createUserAvatar(user);
             });
-
+            
+            // 自分のアバターが作成されているか確認
+            const myAvatar = elements.officeFloor.querySelector(`[data-user-id="${currentUser?.id}"]`);
+            console.log('My avatar after creation:', myAvatar);
+            
             // 参加者リスト更新
             updateParticipantsList();
         }
 
         // ユーザーアバター作成
         function createUserAvatar(user) {
+            console.log('Creating avatar for user:', user);
+            
             const avatar = document.createElement('div');
             avatar.className = 'user-avatar';
             if (user.id === currentUser?.id) {
                 avatar.classList.add('joining');
+                console.log('Creating MY avatar:', user.nickname);
             }
-            avatar.style.left = user.x + 'px';
-            avatar.style.top = user.y + 'px';
+            
+            // 位置を安全な範囲に設定
+            const safeX = Math.max(50, Math.min(user.x || 300, 1200));
+            const safeY = Math.max(50, Math.min(user.y || 300, 700));
+            
+            avatar.style.left = safeX + 'px';
+            avatar.style.top = safeY + 'px';
+            avatar.style.zIndex = user.id === currentUser?.id ? '20' : '10';
             avatar.setAttribute('data-user-id', user.id);
 
             const circle = document.createElement('div');
             circle.className = 'avatar-circle';
             if (user.id === currentUser?.id) {
                 circle.classList.add('my-avatar');
+                console.log('Adding my-avatar class');
             }
             if (user.isSpeaking && user.micOn) {
                 circle.classList.add('speaking');
             }
-            circle.style.background = user.color;
+            circle.style.background = user.color || 'linear-gradient(135deg, #3b82f6, #1d4ed8)';
             circle.textContent = user.nickname.charAt(0).toUpperCase();
 
             const statusIndicator = document.createElement('div');
-            statusIndicator.className = `status-indicator status-${user.status}`;
+            statusIndicator.className = `status-indicator status-${user.status || 'available'}`;
 
             const micIndicator = document.createElement('div');
             micIndicator.className = 'avatar-mic-indicator';
@@ -1471,6 +1504,8 @@
             avatar.appendChild(name);
 
             elements.officeFloor.appendChild(avatar);
+            
+            console.log('Avatar created and added to DOM:', avatar);
         }
 
         // 参加者リスト更新
@@ -1555,15 +1590,25 @@
             const finalX = Math.max(0, Math.min(x, maxX));
             const finalY = Math.max(0, Math.min(y, maxY));
 
+            // currentUserの位置更新
             currentUser.x = finalX;
             currentUser.y = finalY;
+            
+            // usersオブジェクトも更新
             users[currentUser.id] = { ...currentUser };
+            
+            console.log('Moving to position:', finalX, finalY);
 
             // 自分のアバター更新
             const myAvatar = elements.officeFloor.querySelector(`[data-user-id="${currentUser.id}"]`);
             if (myAvatar) {
                 myAvatar.style.left = finalX + 'px';
                 myAvatar.style.top = finalY + 'px';
+                console.log('Avatar moved to:', finalX, finalY);
+            } else {
+                console.log('My avatar not found, recreating...');
+                // アバターが見つからない場合は再作成
+                createUserAvatar(currentUser);
             }
 
             // 音声範囲表示更新
